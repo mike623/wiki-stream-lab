@@ -32,3 +32,6 @@ logs/
 .omc/
 .hermes/
 .cc-kickoff-prompt.txt
+
+# subagent-driven-development scratch (ledger, reports, review packages)
+.superpowers/
