@@ -1,0 +1,49 @@
+# Local Redpanda (Kafka-compatible broker) + Redpanda Console.
+# Single node, dev mode — enough to learn Kafka semantics locally.
+#
+#   docker compose up -d        start broker + console
+#   docker compose down         stop (keeps data volume)
+#   docker compose down -v      stop and wipe the log (fresh start)
+#
+# External Kafka listener is localhost:19092 (matches KAFKA_BROKERS in .env.example).
+# Console UI: http://localhost:8080
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: wsl-redpanda
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --default-log-level=info
+      # Two listeners: "internal" for in-network clients (console), "external"
+      # for tools on the host (our Go commands at localhost:19092).
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - "19092:19092" # Kafka API (host)
+      - "9644:9644"   # Admin API / metrics
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  console:
+    image: redpandadata/console:v2.7.2
+    container_name: wsl-console
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+
+volumes:
+  redpanda-data: {}
