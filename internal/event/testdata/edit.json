@@ -1,0 +1,30 @@
+{
+  "$schema": "/mediawiki/recentchange/1.0.0",
+  "meta": {
+    "uri": "https://en.wikipedia.org/wiki/Example",
+    "request_id": "00000000-0000-0000-0000-000000000001",
+    "id": "11111111-2222-3333-4444-555555555555",
+    "domain": "en.wikipedia.org",
+    "stream": "mediawiki.recentchange",
+    "dt": "2026-06-28T18:02:00.000Z",
+    "topic": "eqiad.mediawiki.recentchange",
+    "partition": 0,
+    "offset": 6287132814
+  },
+  "id": 1700000000,
+  "type": "edit",
+  "namespace": 0,
+  "title": "Example",
+  "title_url": "https://en.wikipedia.org/wiki/Example",
+  "comment": "fix typo",
+  "timestamp": 1782669720,
+  "user": "Alice",
+  "bot": false,
+  "minor": true,
+  "length": { "old": 1200, "new": 1240 },
+  "revision": { "old": 1000000, "new": 1000001 },
+  "server_url": "https://en.wikipedia.org",
+  "server_name": "en.wikipedia.org",
+  "server_script_path": "/w",
+  "wiki": "enwiki"
+}

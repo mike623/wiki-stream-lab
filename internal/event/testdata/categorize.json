@@ -1,0 +1,27 @@
+{
+  "$schema": "/mediawiki/recentchange/1.0.0",
+  "meta": {
+    "uri": "https://commons.wikimedia.org/wiki/Category:Media_contributed_by_the_National_Archives_and_Records_Administration",
+    "request_id": "a8b69609-e6c7-4106-9c00-92e23f3221ff",
+    "id": "547b4bc8-1a5e-4f95-aec7-52121333d843",
+    "domain": "commons.wikimedia.org",
+    "stream": "mediawiki.recentchange",
+    "dt": "2026-06-28T18:01:51.863Z",
+    "topic": "eqiad.mediawiki.recentchange",
+    "partition": 0,
+    "offset": 6287132813
+  },
+  "id": 3377407805,
+  "type": "categorize",
+  "namespace": 14,
+  "title": "Category:Media contributed by the National Archives and Records Administration",
+  "title_url": "https://commons.wikimedia.org/wiki/Category:Media_contributed_by_the_National_Archives_and_Records_Administration",
+  "comment": "added to category",
+  "timestamp": 1782669709,
+  "user": "DPLA bot",
+  "bot": true,
+  "server_url": "https://commons.wikimedia.org",
+  "server_name": "commons.wikimedia.org",
+  "server_script_path": "/w",
+  "wiki": "commonswiki"
+}

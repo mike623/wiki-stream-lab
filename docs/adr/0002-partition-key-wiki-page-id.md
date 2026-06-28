@@ -11,3 +11,7 @@ Producer records are keyed by `wiki:page_id` so each page's edits land on a stab
 ## Consequences
 
 Kafka guarantees ordering only within a partition. With `wiki:page_id` we accept that two different pages may be processed out of wall-clock order; this is fine because per-page counters are independent. Changing the key later reshuffles the partition assignment of all keys, so it is not a free change once a topic has history.
+
+## Correction (PR 2)
+
+Inspecting real recentchange events showed the stream carries **no `page_id`** field — only `title` (page identity within a wiki) and a per-change `id`. The page-oriented key is therefore implemented as **`wiki:title`** in PR 4, not `wiki:page_id`. The reasoning above is unchanged: keying by page identity spreads load evenly and preserves per-page order. Caveat: a page move changes its title and thus its key; acceptable for this lab.

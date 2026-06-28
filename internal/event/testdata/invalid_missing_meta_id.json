@@ -1,0 +1,16 @@
+{
+  "$schema": "/mediawiki/recentchange/1.0.0",
+  "meta": {
+    "domain": "commons.wikimedia.org",
+    "stream": "mediawiki.recentchange",
+    "dt": "2026-06-28T18:01:51.863Z"
+  },
+  "id": 3377407805,
+  "type": "categorize",
+  "namespace": 14,
+  "title": "Category:Example",
+  "timestamp": 1782669709,
+  "user": "DPLA bot",
+  "bot": true,
+  "wiki": "commonswiki"
+}
