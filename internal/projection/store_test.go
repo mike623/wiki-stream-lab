@@ -65,6 +65,44 @@ func TestApplyCountsAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestReaders(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	apply := func(id, wiki, title, user string, bot bool, ts int64) {
+		if _, err := s.Apply(ctx, event.Envelope{EventID: id, Wiki: wiki, Title: title, User: user, Bot: bot, OccurredAt: ts}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply("1", "enwiki", "Go", "a", false, 10)
+	apply("2", "enwiki", "Go", "b", true, 20) // Go now 2 edits (1 bot)
+	apply("3", "enwiki", "Rust", "c", false, 30)
+	apply("4", "dewiki", "Auto", "d", true, 40)
+
+	pages, processed, err := s.Counts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pages != 3 || processed != 4 {
+		t.Errorf("Counts = pages %d, processed %d; want 3, 4", pages, processed)
+	}
+
+	top, err := s.TopPages(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(top) != 3 || top[0].Title != "Go" || top[0].EditCount != 2 {
+		t.Errorf("TopPages[0] = %+v, want Go with 2 edits first", top[0])
+	}
+
+	stats, err := s.WikiStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 2 || stats[0].Wiki != "enwiki" || stats[0].TotalEvents != 3 {
+		t.Errorf("WikiStats[0] = %+v, want enwiki total 3 first", stats[0])
+	}
+}
+
 func TestLastEventAtNeverGoesBackwards(t *testing.T) {
 	ctx := context.Background()
 	s := newStore(t)

@@ -91,6 +91,67 @@ func (s *Store) GetPage(ctx context.Context, wiki, title string) (p Page, ok boo
 	return p, true, nil
 }
 
+// WikiStat is one row of the wiki_stats read model.
+type WikiStat struct {
+	Wiki        string
+	TotalEvents int
+	BotEvents   int
+	HumanEvents int
+	LastEventAt int64
+}
+
+// Counts returns the number of distinct pages tracked and the number of
+// processed (deduped) events.
+func (s *Store) Counts(ctx context.Context) (pages, processed int, err error) {
+	if err = s.db.QueryRowContext(ctx, `SELECT count(*) FROM page_activity`).Scan(&pages); err != nil {
+		return 0, 0, fmt.Errorf("projection: count pages: %w", err)
+	}
+	if err = s.db.QueryRowContext(ctx, `SELECT count(*) FROM processed_events`).Scan(&processed); err != nil {
+		return 0, 0, fmt.Errorf("projection: count processed: %w", err)
+	}
+	return pages, processed, nil
+}
+
+// TopPages returns the most-edited pages, highest edit_count first.
+func (s *Store) TopPages(ctx context.Context, limit int) ([]Page, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT wiki, title, edit_count, bot_edit_count, last_event_at, last_user
+		 FROM page_activity ORDER BY edit_count DESC, wiki, title LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("projection: top pages: %w", err)
+	}
+	defer rows.Close()
+	var out []Page
+	for rows.Next() {
+		var p Page
+		if err := rows.Scan(&p.Wiki, &p.Title, &p.EditCount, &p.BotEditCount, &p.LastEventAt, &p.LastUser); err != nil {
+			return nil, fmt.Errorf("projection: scan page: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// WikiStats returns per-wiki totals, busiest first.
+func (s *Store) WikiStats(ctx context.Context) ([]WikiStat, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT wiki, total_events, bot_events, human_events, last_event_at
+		 FROM wiki_stats ORDER BY total_events DESC, wiki`)
+	if err != nil {
+		return nil, fmt.Errorf("projection: wiki stats: %w", err)
+	}
+	defer rows.Close()
+	var out []WikiStat
+	for rows.Next() {
+		var w WikiStat
+		if err := rows.Scan(&w.Wiki, &w.TotalEvents, &w.BotEvents, &w.HumanEvents, &w.LastEventAt); err != nil {
+			return nil, fmt.Errorf("projection: scan wiki stat: %w", err)
+		}
+		out = append(out, w)
+	}
+	return out, rows.Err()
+}
+
 // Apply records one validated event into the read model, idempotently. It
 // returns applied=false (and changes nothing) if the event_id was already
 // processed. The dedupe insert and the projection updates share one
