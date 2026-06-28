@@ -77,8 +77,23 @@ go run ./cmd/producer -file events.sse      # replay SSE from a file (offline/de
 # validator (PR 5 — works now): raw -> validated (Envelope), malformed -> dead_letter
 go run ./cmd/validator           # consumer group "validator"; Ctrl-C to stop
 
-# later PRs
-go run ./cmd/projector           # PR 6
+# projector (PR 6 — works now): validated -> SQLite page-activity, idempotent
+go run ./cmd/projector           # consumer group "projector"; Ctrl-C to stop
+```
+
+Inspect the read model (default DB `.data/wiki-stream-lab.sqlite`):
+
+```bash
+sqlite3 -header -column .data/wiki-stream-lab.sqlite \
+  "SELECT wiki,title,edit_count,bot_edit_count,last_user FROM page_activity ORDER BY edit_count DESC LIMIT 5;"
+sqlite3 -header -column .data/wiki-stream-lab.sqlite "SELECT * FROM wiki_stats ORDER BY total_events DESC;"
+```
+
+Prove idempotency — replay the validated topic and watch counts NOT change:
+
+```bash
+docker compose exec redpanda rpk group seek projector --to start  # rewind offsets
+go run ./cmd/projector   # logs applied:0 skipped_duplicates:N; SQLite rows unchanged
 ```
 
 Inspect the validator's output:
