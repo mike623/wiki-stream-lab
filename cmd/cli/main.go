@@ -2,8 +2,10 @@
 //
 //	cli topics create   create the pipeline topics on the broker
 //	cli topics list     list the topics the broker knows about
+//	cli db inspect      show the SQLite projection (counts, top pages, wiki stats)
+//	cli db reset        delete the SQLite projection so it can be rebuilt by replay
 //
-// The broker address comes from KAFKA_BROKERS (see .env.example).
+// Broker address comes from KAFKA_BROKERS; DB path from SQLITE_PATH (.env.example).
 package main
 
 import (
@@ -13,6 +15,7 @@ import (
 
 	"github.com/mike623/wiki-stream-lab/internal/config"
 	wkafka "github.com/mike623/wiki-stream-lab/internal/kafka"
+	"github.com/mike623/wiki-stream-lab/internal/projection"
 )
 
 func main() {
@@ -23,18 +26,29 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) < 2 || args[0] != "topics" {
-		return fmt.Errorf("usage: cli topics <create|list>")
+	if len(args) < 2 {
+		return fmt.Errorf("usage: cli <topics create|topics list|db inspect|db reset>")
 	}
 
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return err
 	}
-	broker := cfg.KafkaBrokers[0]
 	ctx := context.Background()
 
-	switch args[1] {
+	switch args[0] {
+	case "topics":
+		return runTopics(ctx, cfg, args[1])
+	case "db":
+		return runDB(ctx, cfg, args[1])
+	default:
+		return fmt.Errorf("unknown command %q (want topics|db)", args[0])
+	}
+}
+
+func runTopics(ctx context.Context, cfg config.Config, sub string) error {
+	broker := cfg.KafkaBrokers[0]
+	switch sub {
 	case "create":
 		specs := wkafka.PipelineTopics()
 		if err := wkafka.EnsureTopics(ctx, broker, specs); err != nil {
@@ -54,6 +68,63 @@ func run(args []string) error {
 		}
 		return nil
 	default:
-		return fmt.Errorf("unknown topics subcommand %q (want create|list)", args[1])
+		return fmt.Errorf("unknown topics subcommand %q (want create|list)", sub)
+	}
+}
+
+func runDB(ctx context.Context, cfg config.Config, sub string) error {
+	switch sub {
+	case "reset":
+		// Removing the file (and any WAL/SHM sidecars) is the whole reset: the
+		// projector recreates the schema on next start. The log stays the
+		// source of truth, so the projection can be rebuilt by replay.
+		removed := false
+		for _, p := range []string{cfg.SQLitePath, cfg.SQLitePath + "-wal", cfg.SQLitePath + "-shm"} {
+			err := os.Remove(p)
+			if err == nil {
+				removed = true
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("cli: remove %s: %w", p, err)
+			}
+		}
+		if removed {
+			fmt.Printf("deleted projection at %s\n", cfg.SQLitePath)
+		} else {
+			fmt.Printf("no projection at %s (already clean)\n", cfg.SQLitePath)
+		}
+		return nil
+	case "inspect":
+		store, err := projection.Open(cfg.SQLitePath)
+		if err != nil {
+			return err
+		}
+		defer store.Close()
+
+		pages, processed, err := store.Counts(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("pages: %d   processed_events: %d\n", pages, processed)
+
+		top, err := store.TopPages(ctx, 10)
+		if err != nil {
+			return err
+		}
+		fmt.Println("\ntop pages by edits:")
+		for _, p := range top {
+			fmt.Printf("  %4d edits (%d bot)  %s:%s  last=%s\n", p.EditCount, p.BotEditCount, p.Wiki, p.Title, p.LastUser)
+		}
+
+		stats, err := store.WikiStats(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Println("\nwiki stats:")
+		for _, w := range stats {
+			fmt.Printf("  %-16s total=%d bot=%d human=%d\n", w.Wiki, w.TotalEvents, w.BotEvents, w.HumanEvents)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown db subcommand %q (want inspect|reset)", sub)
 	}
 }

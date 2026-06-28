@@ -81,12 +81,11 @@ go run ./cmd/validator           # consumer group "validator"; Ctrl-C to stop
 go run ./cmd/projector           # consumer group "projector"; Ctrl-C to stop
 ```
 
-Inspect the read model (default DB `.data/wiki-stream-lab.sqlite`):
+Inspect the read model (PR 7 — `cli db`, no SQL needed):
 
 ```bash
-sqlite3 -header -column .data/wiki-stream-lab.sqlite \
-  "SELECT wiki,title,edit_count,bot_edit_count,last_user FROM page_activity ORDER BY edit_count DESC LIMIT 5;"
-sqlite3 -header -column .data/wiki-stream-lab.sqlite "SELECT * FROM wiki_stats ORDER BY total_events DESC;"
+go run ./cmd/cli db inspect    # counts, top pages, per-wiki stats
+go run ./cmd/cli db reset      # delete the SQLite projection
 ```
 
 Prove idempotency — replay the validated topic and watch counts NOT change:
@@ -95,6 +94,22 @@ Prove idempotency — replay the validated topic and watch counts NOT change:
 docker compose exec redpanda rpk group seek projector --to start  # rewind offsets
 go run ./cmd/projector   # logs applied:0 skipped_duplicates:N; SQLite rows unchanged
 ```
+
+## Replay / rebuild from the log (PR 7)
+
+The SQLite projection is disposable — the Kafka log is the source of truth. Delete the read model and rebuild it from history:
+
+```bash
+go run ./cmd/cli db inspect                         # note the numbers
+go run ./cmd/cli db reset                            # 1. delete the projection
+docker compose exec redpanda rpk group seek projector --to start   # 2. rewind offsets to earliest
+go run ./cmd/projector                               # 3. replay -> rebuilds identically
+go run ./cmd/cli db inspect                          # same numbers as before
+```
+
+Because the projector is idempotent (dedupe on `event_id`), the rebuild is exact — running it again changes nothing.
+
+**Retention note:** replay only goes back as far as the broker still has data. Redpanda keeps the log per its retention config (effectively unbounded for this single-node dev setup, until you `docker compose down -v`). In production you'd size retention — or use a compacted topic — to control how far back you can rebuild.
 
 Inspect the validator's output:
 

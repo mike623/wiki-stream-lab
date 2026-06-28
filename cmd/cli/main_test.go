@@ -9,7 +9,8 @@ func TestRunUsageErrors(t *testing.T) {
 		{},                  // no args
 		{"topics"},          // missing subcommand
 		{"nottopics", "x"},  // wrong group
-		{"topics", "bogus"}, // unknown subcommand
+		{"topics", "bogus"}, // unknown topics subcommand
+		{"db", "bogus"},     // unknown db subcommand
 	}
 	for _, args := range cases {
 		if err := run(args); err == nil {
