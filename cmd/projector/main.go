@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/mike623/wiki-stream-lab/internal/config"
 	"github.com/mike623/wiki-stream-lab/internal/event"
@@ -46,9 +47,10 @@ func run(logger *slog.Logger) error {
 	reader := wkafka.NewReader(cfg.KafkaBrokers, consumerGroup, wkafka.TopicValidated)
 	defer reader.Close()
 
-	logger.Info("projector starting", "group", consumerGroup, "source", wkafka.TopicValidated, "db", cfg.SQLitePath)
+	logger.Info("projector starting", "group", consumerGroup, "source", wkafka.TopicValidated, "db", cfg.SQLitePath, "slow_ms", cfg.SlowConsumerMS)
 
 	var applied, skipped int
+loop:
 	for {
 		m, err := reader.FetchMessage(ctx)
 		if err != nil {
@@ -76,6 +78,15 @@ func run(logger *slog.Logger) error {
 			applied++
 		} else {
 			skipped++
+		}
+
+		// Backpressure demo: deliberately slow processing so lag builds up.
+		if cfg.SlowConsumerMS > 0 {
+			select {
+			case <-time.After(time.Duration(cfg.SlowConsumerMS) * time.Millisecond):
+			case <-ctx.Done():
+				break loop // shutting down mid-delay is clean
+			}
 		}
 
 		if err := reader.CommitMessages(ctx, m); err != nil {

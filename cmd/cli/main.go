@@ -26,8 +26,8 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: cli <topics create|topics list|db inspect|db reset>")
+	if len(args) == 0 {
+		return fmt.Errorf("usage: cli <topics create|topics list|db inspect|db reset|lag [group] [topic]>")
 	}
 
 	cfg, err := config.Load(os.Getenv)
@@ -38,12 +38,41 @@ func run(args []string) error {
 
 	switch args[0] {
 	case "topics":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: cli topics <create|list>")
+		}
 		return runTopics(ctx, cfg, args[1])
 	case "db":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: cli db <inspect|reset>")
+		}
 		return runDB(ctx, cfg, args[1])
+	case "lag":
+		return runLag(ctx, cfg, args[1:])
 	default:
-		return fmt.Errorf("unknown command %q (want topics|db)", args[0])
+		return fmt.Errorf("unknown command %q (want topics|db|lag)", args[0])
 	}
+}
+
+// runLag reports consumer-group lag. Defaults to the projector group on the
+// validated topic; optional args override group and topic.
+func runLag(ctx context.Context, cfg config.Config, args []string) error {
+	group, topic := "projector", wkafka.TopicValidated
+	if len(args) >= 1 && args[0] != "" {
+		group = args[0]
+	}
+	if len(args) >= 2 && args[1] != "" {
+		topic = args[1]
+	}
+	lags, total, err := wkafka.GroupLag(ctx, cfg.KafkaBrokers, group, topic)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("group %q on %s — total lag %d\n", group, topic, total)
+	for _, l := range lags {
+		fmt.Printf("  p%-2d  committed=%-8d high=%-8d  lag=%d\n", l.Partition, l.Committed, l.HighWater, l.Lag)
+	}
+	return nil
 }
 
 func runTopics(ctx context.Context, cfg config.Config, sub string) error {

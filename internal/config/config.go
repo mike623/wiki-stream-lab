@@ -19,6 +19,11 @@ type Config struct {
 	// often the producer logs a running count (every N messages).
 	ProducerMaxSeconds int
 	ProducerLogEvery   int
+
+	// SlowConsumerMS artificially delays the projector by this many
+	// milliseconds per message; 0 = full speed. Used to induce consumer lag
+	// for the backpressure demo.
+	SlowConsumerMS int
 }
 
 // Load builds a Config from environment variables, applying defaults.
@@ -34,6 +39,10 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	slowMS, err := getIntOr(getenv, "SLOW_CONSUMER_MS", 0)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		KafkaBrokers:       splitBrokers(getOr(getenv, "KAFKA_BROKERS", "localhost:19092")),
@@ -41,6 +50,7 @@ func Load(getenv func(string) string) (Config, error) {
 		SQLitePath:         getOr(getenv, "SQLITE_PATH", ".data/wiki-stream-lab.sqlite"),
 		ProducerMaxSeconds: maxSeconds,
 		ProducerLogEvery:   logEvery,
+		SlowConsumerMS:     slowMS,
 	}
 	if len(cfg.KafkaBrokers) == 0 {
 		return Config{}, fmt.Errorf("config: KAFKA_BROKERS resolved to no brokers")
