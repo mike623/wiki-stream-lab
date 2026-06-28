@@ -154,6 +154,26 @@ Observed in a run: backlog 20 → one slow consumer left 9 → scaling cleared i
 
 **The partition ceiling:** the topics have **6 partitions**, and each partition is consumed by at most one member of a group. So adding consumers speeds the drain only **up to 6**; a 7th sits idle. That is the fundamental scaling limit Kafka makes explicit — and why the partition count (and key choice, [ADR 0002](docs/adr/0002-partition-key-wiki-page-id.md)) matters. You can also watch lag live in the Redpanda Console (http://localhost:8080) or via `rpk group describe projector`.
 
+## Live dashboard (PR 9)
+
+A hybrid view of the running pipeline:
+
+- **Grafana** (metrics) at http://localhost:3000 — throughput (events/min), event-type pie, top-5 wikis, total gauge. Auto-provisioned dashboard "wiki-stream-lab".
+- **Go raw-log page** at http://localhost:8090 — the last 10 raw events, auto-refreshing.
+
+`docker compose up -d` now also starts Prometheus + Grafana. The metrics come from `cmd/dashboard`, which runs on the host, consumes the raw topic, and exports `/metrics` (Prometheus scrapes it via `host.docker.internal`).
+
+```bash
+docker compose up -d              # redpanda, console, prometheus, grafana
+go run ./cmd/dashboard            # host: exports metrics + serves the raw-log page on :8090
+go run ./cmd/producer            # feed the firehose; watch the panels move
+
+open http://localhost:3000        # Grafana (anonymous, no login)
+open http://localhost:8090        # last 10 raw events
+```
+
+Metrics exported: `wsl_events_total`, `wsl_events_by_type_total{type}`, `wsl_events_by_wiki_total{wiki}`. Throughput is `rate(wsl_events_total[1m])*60`. (Redpanda's own broker metrics are also scraped under the `redpanda` job.)
+
 ## Key docs
 
 - Product plan: [`docs/PRD.md`](docs/PRD.md)

@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # The dashboard runs on the host (go run ./cmd/dashboard); containers reach
+  # the host via host.docker.internal.
+  - job_name: wiki-stream-lab
+    static_configs:
+      - targets: ["host.docker.internal:8090"]
+
+  # Redpanda's own broker metrics (throughput, partitions, etc).
+  - job_name: redpanda
+    metrics_path: /public_metrics
+    static_configs:
+      - targets: ["redpanda:9644"]
