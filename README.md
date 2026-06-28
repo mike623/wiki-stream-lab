@@ -127,6 +127,33 @@ docker compose exec redpanda rpk topic consume wikimedia.recentchange.raw -n 2 -
 # enwiki:Go (programming language) => {"wiki":"enwiki","title":"Go (programming language)",...}
 ```
 
+## Backpressure / consumer lag (PR 8)
+
+Consumer **lag** = messages written but not yet processed by a group. Slow the projector to make lag build, then scale the group to drain it.
+
+```bash
+go run ./cmd/cli lag                                   # per-partition + total lag (group projector)
+
+docker compose exec redpanda rpk group seek projector --to start   # rewind so the backlog is pending
+go run ./cmd/cli lag                                   # total lag == backlog size
+
+SLOW_CONSUMER_MS=500 go run ./cmd/projector            # one slow consumer — Ctrl-C after a bit
+go run ./cmd/cli lag                                   # lag only partly drained; it can't keep up
+```
+
+Now run **several** projectors in separate terminals (same `projector` group):
+
+```bash
+SLOW_CONSUMER_MS=500 go run ./cmd/projector   # terminal 1
+SLOW_CONSUMER_MS=500 go run ./cmd/projector   # terminal 2
+SLOW_CONSUMER_MS=500 go run ./cmd/projector   # terminal 3
+go run ./cmd/cli lag                           # drains faster — work is shared across the group
+```
+
+Observed in a run: backlog 20 → one slow consumer left 9 → scaling cleared it to 0.
+
+**The partition ceiling:** the topics have **6 partitions**, and each partition is consumed by at most one member of a group. So adding consumers speeds the drain only **up to 6**; a 7th sits idle. That is the fundamental scaling limit Kafka makes explicit — and why the partition count (and key choice, [ADR 0002](docs/adr/0002-partition-key-wiki-page-id.md)) matters. You can also watch lag live in the Redpanda Console (http://localhost:8080) or via `rpk group describe projector`.
+
 ## Key docs
 
 - Product plan: [`docs/PRD.md`](docs/PRD.md)

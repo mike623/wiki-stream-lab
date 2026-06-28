@@ -21,6 +21,7 @@ func TestLoad(t *testing.T) {
 				SQLitePath:         ".data/wiki-stream-lab.sqlite",
 				ProducerMaxSeconds: 30,
 				ProducerLogEvery:   100,
+				SlowConsumerMS:     0,
 			},
 		},
 		{
@@ -32,6 +33,7 @@ func TestLoad(t *testing.T) {
 				SQLitePath:         ".data/wiki-stream-lab.sqlite",
 				ProducerMaxSeconds: 30,
 				ProducerLogEvery:   100,
+				SlowConsumerMS:     0,
 			},
 		},
 		{
@@ -42,6 +44,7 @@ func TestLoad(t *testing.T) {
 				"SQLITE_PATH":          "/tmp/test.sqlite",
 				"PRODUCER_MAX_SECONDS": "0",
 				"PRODUCER_LOG_EVERY":   "500",
+				"SLOW_CONSUMER_MS":     "1000",
 			},
 			want: Config{
 				KafkaBrokers:       []string{"broker:9092"},
@@ -49,6 +52,7 @@ func TestLoad(t *testing.T) {
 				SQLitePath:         "/tmp/test.sqlite",
 				ProducerMaxSeconds: 0,
 				ProducerLogEvery:   500,
+				SlowConsumerMS:     1000,
 			},
 		},
 		{
