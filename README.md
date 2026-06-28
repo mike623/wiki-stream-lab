@@ -74,9 +74,20 @@ go vet ./...
 go run ./cmd/producer                       # live; stops after PRODUCER_MAX_SECONDS
 go run ./cmd/producer -file events.sse      # replay SSE from a file (offline/demo)
 
+# validator (PR 5 — works now): raw -> validated (Envelope), malformed -> dead_letter
+go run ./cmd/validator           # consumer group "validator"; Ctrl-C to stop
+
 # later PRs
-go run ./cmd/validator           # PR 5
 go run ./cmd/projector           # PR 6
+```
+
+Inspect the validator's output:
+
+```bash
+docker compose exec redpanda rpk topic consume wikimedia.recentchange.validated -n 1 -o start -f '%v\n'
+# {"event_id":"...","event_type":"edit","wiki":"enwiki","title":"...","user":"...","bot":false,"occurred_at":...}
+docker compose exec redpanda rpk topic consume wikimedia.dead_letter -n 1 -o start -f '%v\n'
+# {"reason":"invalid recentchange event: missing meta.id","source_topic":"...","partition":2,"offset":0,"raw":"..."}
 ```
 
 Prove the producer worked — consume a couple of raw messages back:
