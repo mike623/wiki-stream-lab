@@ -26,6 +26,26 @@ func ParseRaw(data []byte) (RawEvent, error) {
 	return e, nil
 }
 
+// PageKey returns the Kafka partition key for a raw recentchange payload:
+// "<wiki>:<title>". It does a minimal decode of just wiki and title so the
+// producer can key events it would not necessarily fully validate — keeping
+// raw bytes flowing onto the log, with full validation deferred to the
+// validator consumer. The upstream stream has no page_id, so title is the
+// page identity within a wiki (see docs/adr/0002).
+func PageKey(raw []byte) (string, error) {
+	var k struct {
+		Wiki  string `json:"wiki"`
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(raw, &k); err != nil {
+		return "", fmt.Errorf("event: key decode: %w", err)
+	}
+	if k.Wiki == "" || k.Title == "" {
+		return "", fmt.Errorf("%w: key needs wiki and title", ErrInvalid)
+	}
+	return k.Wiki + ":" + k.Title, nil
+}
+
 // Validate checks that the fields required downstream are present.
 func (e RawEvent) Validate() error {
 	switch {

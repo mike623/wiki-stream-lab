@@ -19,6 +19,8 @@ func TestLoad(t *testing.T) {
 				KafkaBrokers:       []string{"localhost:19092"},
 				WikimediaStreamURL: "https://stream.wikimedia.org/v2/stream/recentchange",
 				SQLitePath:         ".data/wiki-stream-lab.sqlite",
+				ProducerMaxSeconds: 30,
+				ProducerLogEvery:   100,
 			},
 		},
 		{
@@ -28,6 +30,8 @@ func TestLoad(t *testing.T) {
 				KafkaBrokers:       []string{"a:9092", "b:9092", "c:9092"},
 				WikimediaStreamURL: "https://stream.wikimedia.org/v2/stream/recentchange",
 				SQLitePath:         ".data/wiki-stream-lab.sqlite",
+				ProducerMaxSeconds: 30,
+				ProducerLogEvery:   100,
 			},
 		},
 		{
@@ -36,16 +40,25 @@ func TestLoad(t *testing.T) {
 				"KAFKA_BROKERS":        "broker:9092",
 				"WIKIMEDIA_STREAM_URL": "http://localhost:8080/fixture",
 				"SQLITE_PATH":          "/tmp/test.sqlite",
+				"PRODUCER_MAX_SECONDS": "0",
+				"PRODUCER_LOG_EVERY":   "500",
 			},
 			want: Config{
 				KafkaBrokers:       []string{"broker:9092"},
 				WikimediaStreamURL: "http://localhost:8080/fixture",
 				SQLitePath:         "/tmp/test.sqlite",
+				ProducerMaxSeconds: 0,
+				ProducerLogEvery:   500,
 			},
 		},
 		{
 			name:    "blank KAFKA_BROKERS is an error",
 			env:     map[string]string{"KAFKA_BROKERS": " , "},
+			wantErr: true,
+		},
+		{
+			name:    "non-numeric PRODUCER_MAX_SECONDS is an error",
+			env:     map[string]string{"PRODUCER_MAX_SECONDS": "abc"},
 			wantErr: true,
 		},
 	}
