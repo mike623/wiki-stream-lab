@@ -70,10 +70,20 @@ go build ./...
 go test ./...
 go vet ./...
 
-# run components (later PRs)
-go run ./cmd/producer            # PR 4
+# producer (PR 4 — works now): live SSE -> raw topic, keyed wiki:title
+go run ./cmd/producer                       # live; stops after PRODUCER_MAX_SECONDS
+go run ./cmd/producer -file events.sse      # replay SSE from a file (offline/demo)
+
+# later PRs
 go run ./cmd/validator           # PR 5
 go run ./cmd/projector           # PR 6
+```
+
+Prove the producer worked — consume a couple of raw messages back:
+
+```bash
+docker compose exec redpanda rpk topic consume wikimedia.recentchange.raw -n 2 -o start -f '%k => %v\n'
+# enwiki:Go (programming language) => {"wiki":"enwiki","title":"Go (programming language)",...}
 ```
 
 ## Key docs
