@@ -42,22 +42,38 @@ No web framework, no ORM, no DI framework. See [`AGENTS.md`](AGENTS.md) for the 
 
 Work lands as a sequence of small PRs (PR 0..8). Each PR teaches one concept, stays well under ~300 changed lines where reasonable, includes tests, and **stops for Mike's review before the next one starts**. The roadmap lives in [`docs/CC_IMPLEMENTATION_PLAN.md`](docs/CC_IMPLEMENTATION_PLAN.md); the rules every PR follows live in [`docs/PR_CONSTITUTION.md`](docs/PR_CONSTITUTION.md).
 
-## Commands (target — most arrive in later PRs)
+## Local broker + topics (PR 3 — works now)
 
 ```bash
-# infra
-docker compose up -d                 # Redpanda broker + Console  (PR 3)
+docker compose up -d            # start Redpanda + Console; broker on localhost:19092
+go run ./cmd/cli topics create  # create the pipeline topics (idempotent)
+go run ./cmd/cli topics list    # list topics on the broker
+```
 
+Console UI: http://localhost:8080 · stop with `docker compose down` (add `-v` to wipe the log).
+
+Topics created (partition counts per [ADR 0002](docs/adr/0002-partition-key-wiki-page-id.md)):
+
+| topic | partitions | why |
+|---|---|---|
+| `wikimedia.recentchange.raw` | 6 | scales the consumer-group lag demo |
+| `wikimedia.recentchange.validated` | 6 | same |
+| `wikimedia.dead_letter` | 1 | low volume, ordering-insensitive |
+
+> On this machine `docker` is a podman shim — run `podman machine start` first if compose can't connect.
+
+## Other commands
+
+```bash
 # build / test
 go build ./...
 go test ./...
 go vet ./...
 
-# run components (PRs 4-6)
-go run ./cmd/producer
-go run ./cmd/validator
-go run ./cmd/projector
-go run ./cmd/cli inspect
+# run components (later PRs)
+go run ./cmd/producer            # PR 4
+go run ./cmd/validator           # PR 5
+go run ./cmd/projector           # PR 6
 ```
 
 ## Key docs
