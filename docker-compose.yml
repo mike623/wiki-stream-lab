@@ -45,5 +45,44 @@ services:
     environment:
       KAFKA_BROKERS: redpanda:9092
 
+  # Real-time OLAP (PR 9): ingests the validated topic from Redpanda via the
+  # Kafka table engine; Grafana queries it for live insight.
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: wsl-clickhouse
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8123:8123" # HTTP
+      - "9000:9000" # native (Grafana datasource)
+    environment:
+      # Local lab: keep the classic open "default" user (network access, no
+      # password) instead of the image's lock-down-when-no-password behavior.
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - ./deploy/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./deploy/clickhouse/config.d/kafka.xml:/etc/clickhouse-server/config.d/kafka.xml:ro
+      - clickhouse-data:/var/lib/clickhouse
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: wsl-grafana
+    depends_on:
+      - clickhouse
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_INSTALL_PLUGINS: "grafana-clickhouse-datasource"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   redpanda-data: {}
+  clickhouse-data: {}

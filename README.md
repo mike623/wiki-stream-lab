@@ -154,6 +154,41 @@ Observed in a run: backlog 20 → one slow consumer left 9 → scaling cleared i
 
 **The partition ceiling:** the topics have **6 partitions**, and each partition is consumed by at most one member of a group. So adding consumers speeds the drain only **up to 6**; a 7th sits idle. That is the fundamental scaling limit Kafka makes explicit — and why the partition count (and key choice, [ADR 0002](docs/adr/0002-partition-key-wiki-page-id.md)) matters. You can also watch lag live in the Redpanda Console (http://localhost:8080) or via `rpk group describe projector`.
 
+## Real-time insight dashboard (PR 9 — ClickHouse + Grafana)
+
+The enterprise pattern: **Redpanda → ClickHouse (real-time OLAP) → Grafana**. ClickHouse ingests the `validated` topic *directly* via its Kafka table engine — no consumer code — and Grafana queries it for sub-second, drill-down insight (throughput, event type, top wikis, last 10 events, total). This is the analytics layer; arbitrary group-by belongs here, not in ops metrics.
+
+```bash
+docker compose up -d            # now also starts ClickHouse + Grafana
+go run ./cmd/cli topics create  # if not already
+go run ./cmd/producer           # feed the firehose
+go run ./cmd/validator          # raw -> validated (ClickHouse reads validated)
+
+open http://localhost:3000      # Grafana, dashboard "wiki-stream-lab (ClickHouse)" (anonymous)
+```
+
+How it flows:
+
+```text
+validated topic
+   │  ClickHouse Kafka engine (consumer group "clickhouse")  ← no app code
+   ▼
+wsl.kafka_validated ──(materialized view)──► wsl.events (MergeTree)
+                                                 │
+                                          Grafana (ClickHouse datasource)
+```
+
+Query it directly too:
+
+```bash
+docker compose exec clickhouse clickhouse-client -q \
+  "SELECT event_type, count() c FROM wsl.events GROUP BY event_type ORDER BY c DESC"
+docker compose exec clickhouse clickhouse-client -q \
+  "SELECT wiki, count() c FROM wsl.events GROUP BY wiki ORDER BY c DESC LIMIT 5"
+```
+
+ClickHouse is a **4th independent consumer group** on the log (alongside validator, projector) — the same event stream, read again for a different purpose. All local, no cloud. (ClickHouse is also what Tinybird runs managed — same SQL transfers.)
+
 ## Key docs
 
 - Product plan: [`docs/PRD.md`](docs/PRD.md)
