@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+spec:
+  replicas: 1               # singleton firehose — NEVER scale (would duplicate data)
+  selector: { matchLabels: { app: producer } }
+  template:
+    metadata:
+      labels: { app: producer }
+    spec:
+      containers:
+        - name: producer
+          image: {{ include "wsl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/producer"]
+          env:
+            - { name: KAFKA_BROKERS, value: "{{ .Values.kafka.brokers }}" }
+            - { name: PRODUCER_MAX_SECONDS, value: "0" }
