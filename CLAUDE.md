@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: pre-implementation
+## Status: pipeline + lake implemented (PR 0–11)
 
-As of this writing the repo contains docs only plus `.env.example`. There is no Go module or app source yet. Build it through the staged PR roadmap in `docs/CC_IMPLEMENTATION_PLAN.md`.
+The core pipeline (producer → validator → projector), the replay/lag demos, the ClickHouse+Grafana OLAP layer, and the object-storage layer (archiver backup + Parquet lake in RustFS, queryable by DuckDB) are all built and run via Docker Compose. Keep building through the staged PR roadmap in `docs/CC_IMPLEMENTATION_PLAN.md`.
 
 ## What this project is
 
@@ -30,9 +30,14 @@ Wikimedia SSE
   -> producer      -> topic: wikimedia.recentchange.raw
   -> validator     -> topic: wikimedia.recentchange.validated  (bad records -> wikimedia.dead_letter)
   -> projector     -> SQLite projection (.data/wiki-stream-lab.sqlite)
+
+validated topic also fans out to independent consumer groups:
+  -> ClickHouse (Kafka engine + MV) -> Grafana          real-time OLAP
+  -> archiver  (archiver-raw)  -> RustFS: gzipped JSONL  verbatim backup
+  -> laker     (lake-parquet)  -> RustFS: Parquet lake    columnar, queried by DuckDB
 ```
 
-Independent consumers read the same log. The SQLite projection must be deletable and rebuildable by replaying Kafka history, proving the log is the source of truth.
+Independent consumers read the same log. The SQLite projection must be deletable and rebuildable by replaying Kafka history, proving the log is the source of truth. The archiver and laker commit Kafka offsets only after the object lands in S3 (at-least-once, idempotent storage).
 
 ## Planned Go layout, grown lazily
 
@@ -42,10 +47,13 @@ Do not scaffold empty packages ahead of need.
 cmd/producer/main.go
 cmd/validator/main.go
 cmd/projector/main.go
+cmd/archiver/main.go   # validated -> gzipped JSONL backup in S3
+cmd/laker/main.go      # validated -> Parquet lake in S3
 cmd/cli/main.go
 internal/event/
 internal/kafka/
 internal/projection/
+internal/objstore/     # thin S3 client (RustFS) for archiver + laker
 testdata/
 ```
 
@@ -81,7 +89,7 @@ docker compose up -d
 # then run the Go CLI/producer/validator/projector commands introduced by each PR
 ```
 
-Config is via env (`.env.example` is the source of truth): `KAFKA_BROKERS`, `WIKIMEDIA_STREAM_URL`, `PRODUCER_MAX_SECONDS`, `PRODUCER_LOG_EVERY`, `SQLITE_PATH`, `SLOW_CONSUMER_MS`.
+Config is via env (`.env.example` is the source of truth): `KAFKA_BROKERS`, `WIKIMEDIA_STREAM_URL`, `PRODUCER_MAX_SECONDS`, `PRODUCER_LOG_EVERY`, `SQLITE_PATH`, `SLOW_CONSUMER_MS`, and the S3/object-store vars for archiver + laker (`S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`).
 
 Note: on this machine `docker` may be a podman shim; start the podman machine before compose if needed.
 
