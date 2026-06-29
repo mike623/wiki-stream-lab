@@ -172,6 +172,24 @@ services:
     stdin_open: true
     tty: true
 
+  # DuckDB web UI (browser notebook) over the lake. Long-running, tools profile:
+  #   docker compose --profile tools up -d duckdb-ui   ->  http://localhost:4213
+  duckdb-ui:
+    build: ./deploy/duckdb-ui
+    image: wiki-stream-lab-duckdb-ui:local
+    container_name: wsl-duckdb-ui
+    profiles: ["tools"]
+    depends_on:
+      rustfs:
+        condition: service_started
+    environment:
+      HOME: /duckhome
+    ports:
+      - "4213:4213"
+    volumes:
+      - duckdb-ext:/duckhome
+    restart: unless-stopped
+
   # --- pipeline apps (Go), all from one image (Dockerfile) ---
 
   # One-shot: create the topics, then exit. The apps wait for it to finish.
