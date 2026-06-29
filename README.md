@@ -19,13 +19,49 @@ Live edits across Wikimedia projects. No API key. High enough volume to make Kaf
 
 ## Target architecture
 
-```text
-Wikimedia SSE
-  -> producer            -> Kafka/Redpanda topic: wikimedia.recentchange.raw
-  -> validator           -> wikimedia.recentchange.validated  (bad records -> wikimedia.dead_letter)
-  -> projector           -> SQLite page-activity read model (idempotent)
-  -> replay / lag demos  -> rebuild read model from the log; observe consumer lag
+```mermaid
+flowchart LR
+    SSE([Wikimedia SSE<br/>recentchange firehose])
+
+    subgraph apps[Go apps]
+        P[producer]
+        V[validator]
+        PR[projector]
+    end
+
+    subgraph rp[Redpanda broker]
+        RAW[(wikimedia.recentchange.raw)]
+        VAL[(wikimedia.recentchange.validated)]
+        DLQ[(wikimedia.dead_letter)]
+    end
+
+    SQLITE[(SQLite<br/>page-activity read model)]
+
+    subgraph olap[Real-time OLAP]
+        CH[(ClickHouse<br/>wsl.events)]
+        GRAF[Grafana<br/>:3000]
+    end
+
+    CONSOLE[Redpanda Console<br/>:8080]
+
+    SSE -->|HTTP SSE| P
+    P -->|key wiki:title| RAW
+    RAW --> V
+    V -->|valid Envelope| VAL
+    V -->|malformed| DLQ
+    VAL --> PR
+    PR -->|idempotent upsert| SQLITE
+    VAL -->|Kafka engine + MV| CH
+    CH --> GRAF
+    rp -.observe.-> CONSOLE
+
+    classDef topic fill:#1f2937,stroke:#60a5fa,color:#e5e7eb;
+    class RAW,VAL,DLQ topic;
 ```
+
+> Independent consumers read the same log. Delete SQLite and rebuild it by replaying
+> Kafka history — proof the log is the source of truth. Lag demo: `--scale projector=3`
+> with `SLOW_CONSUMER_MS>0`.
 
 ## Stack
 
