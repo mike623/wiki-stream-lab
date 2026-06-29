@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wsl-uis
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - host: wsl.example.com         # replace per environment
+      http:
+        paths:
+          - { path: /grafana, pathType: Prefix, backend: { service: { name: grafana, port: { number: 3000 } } } }
+          - { path: /console, pathType: Prefix, backend: { service: { name: console, port: { number: 8080 } } } }
