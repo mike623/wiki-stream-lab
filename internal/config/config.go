@@ -24,6 +24,19 @@ type Config struct {
 	// milliseconds per message; 0 = full speed. Used to induce consumer lag
 	// for the backpressure demo.
 	SlowConsumerMS int
+
+	// S3* point the archiver at an S3-compatible object store (RustFS locally).
+	S3Endpoint  string
+	S3Region    string
+	S3AccessKey string
+	S3SecretKey string
+	S3Bucket    string
+
+	// ArchiveMaxRows / ArchiveFlushSeconds bound the archiver's in-memory
+	// batch: it flushes a raw-backup object when either limit is hit. A backup
+	// wants a short window, so both default low.
+	ArchiveMaxRows      int
+	ArchiveFlushSeconds int
 }
 
 // Load builds a Config from environment variables, applying defaults.
@@ -43,6 +56,14 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	archiveMaxRows, err := getIntOr(getenv, "ARCHIVE_MAX_ROWS", 5000)
+	if err != nil {
+		return Config{}, err
+	}
+	archiveFlushSeconds, err := getIntOr(getenv, "ARCHIVE_FLUSH_SECONDS", 10)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		KafkaBrokers:       splitBrokers(getOr(getenv, "KAFKA_BROKERS", "localhost:19092")),
@@ -51,6 +72,15 @@ func Load(getenv func(string) string) (Config, error) {
 		ProducerMaxSeconds: maxSeconds,
 		ProducerLogEvery:   logEvery,
 		SlowConsumerMS:     slowMS,
+
+		S3Endpoint:  getOr(getenv, "S3_ENDPOINT", "http://localhost:9100"),
+		S3Region:    getOr(getenv, "S3_REGION", "us-east-1"),
+		S3AccessKey: getOr(getenv, "S3_ACCESS_KEY", "rustfsadmin"),
+		S3SecretKey: getOr(getenv, "S3_SECRET_KEY", "rustfsadmin"),
+		S3Bucket:    getOr(getenv, "S3_BUCKET", "wiki-stream-lab"),
+
+		ArchiveMaxRows:      archiveMaxRows,
+		ArchiveFlushSeconds: archiveFlushSeconds,
 	}
 	if len(cfg.KafkaBrokers) == 0 {
 		return Config{}, fmt.Errorf("config: KAFKA_BROKERS resolved to no brokers")

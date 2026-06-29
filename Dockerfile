@@ -9,6 +9,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /out/producer  ./cmd/producer  \
  && CGO_ENABLED=0 go build -o /out/validator ./cmd/validator \
  && CGO_ENABLED=0 go build -o /out/projector ./cmd/projector \
+ && CGO_ENABLED=0 go build -o /out/archiver  ./cmd/archiver  \
  && CGO_ENABLED=0 go build -o /out/cli       ./cmd/cli
 
 # distroless static: tiny, and ships CA certs so the producer's HTTPS call to
