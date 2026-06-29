@@ -1,0 +1,28 @@
+image:
+  repository: wiki-stream-lab
+  tag: local
+  pullPolicy: IfNotPresent
+
+kafka:
+  brokers: "redpanda:9092"
+
+s3:
+  endpoint: "http://rustfs:9000"
+  bucket: "wiki-stream-lab"
+  accessKey: "rustfsadmin"
+  secretKey: "rustfsadmin"
+
+# Per-consumer slowdown for the lag demo (ms). 0 = full speed.
+slowConsumerMs: 0
+
+tools:
+  enabled: false
+
+storage:
+  # Empty = use the cluster default StorageClass (local-path on kind).
+  # Cloud overlay sets a real class.
+  className: ""
+  redpanda: 2Gi
+  clickhouse: 2Gi
+  rustfs: 5Gi
+  sqlite: 1Gi
