@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-init
+data:
+  init.sql: |
+{{ .Files.Get "files/clickhouse-init.sql" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-kafka
+data:
+  kafka.xml: |
+{{ .Files.Get "files/clickhouse-kafka.xml" | indent 4 }}
