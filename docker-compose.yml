@@ -150,6 +150,28 @@ services:
       - sqlite-data:/data:ro
     restart: unless-stopped
 
+  # On-demand DuckDB CLI for querying the Parquet lake without a local install.
+  # Uses the official DuckDB CLI image. Not started by `up` (tools profile).
+  # Run an interactive session with:
+  #   docker compose run --rm duckdb
+  # then e.g.  SELECT wiki, count(*) FROM lake GROUP BY 1 ORDER BY 2 DESC LIMIT 10;
+  duckdb:
+    image: duckdb/duckdb:1.5.4
+    profiles: ["tools"]
+    depends_on:
+      rustfs:
+        condition: service_started
+    # HOME points at a volume so the httpfs extension downloads once and the
+    # init file is found on the standard search path.
+    environment:
+      HOME: /duckhome
+    entrypoint: ["duckdb", "-init", "/init.sql"]
+    volumes:
+      - ./deploy/duckdb/init.sql:/init.sql:ro
+      - duckdb-ext:/duckhome
+    stdin_open: true
+    tty: true
+
   # --- pipeline apps (Go), all from one image (Dockerfile) ---
 
   # One-shot: create the topics, then exit. The apps wait for it to finish.
@@ -211,3 +233,4 @@ volumes:
   clickhouse-data: {}
   sqlite-data: {}
   rustfs-data: {}
+  duckdb-ext: {}
