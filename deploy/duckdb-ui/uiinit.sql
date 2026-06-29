@@ -3,7 +3,9 @@
 -- cached in the duckdb-ext volume (HOME).
 INSTALL ui;
 LOAD ui;
-SET ui_local_port = 4214;
+-- Must equal the published/browser-facing port: the UI authorizes /localToken
+-- by checking the request Referer starts with http://localhost:<ui_local_port>.
+SET ui_local_port = 4213;
 CALL start_ui_server();
 
 INSTALL httpfs;

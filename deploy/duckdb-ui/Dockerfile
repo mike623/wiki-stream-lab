@@ -1,5 +1,5 @@
 # DuckDB web UI in a container. The UI's HTTP server binds 127.0.0.1 only, so a
-# plain port publish can't reach it; socat bridges 0.0.0.0:4213 -> 127.0.0.1:4214.
+# plain port publish can't reach it; socat bridges 0.0.0.0:4213 -> [::1]:4213.
 # The duckdb binary is lifted from the official image; debian adds a shell + socat.
 FROM debian:bookworm-slim
 
