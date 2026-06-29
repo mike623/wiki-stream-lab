@@ -118,6 +118,26 @@ services:
     command: ["/app/archiver"]
     restart: unless-stopped
 
+  # Lake consumer: validated topic -> columnar Parquet in RustFS (lake/),
+  # queryable by DuckDB or ClickHouse s3(). Big batches for large row groups.
+  laker:
+    build: .
+    image: wiki-stream-lab:local
+    container_name: wsl-laker
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+      rustfs:
+        condition: service_started
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY: rustfsadmin
+      S3_SECRET_KEY: rustfsadmin
+      S3_BUCKET: wiki-stream-lab
+    command: ["/app/laker"]
+    restart: unless-stopped
+
   # --- pipeline apps (Go), all from one image (Dockerfile) ---
 
   # One-shot: create the topics, then exit. The apps wait for it to finish.

@@ -37,6 +37,12 @@ type Config struct {
 	// wants a short window, so both default low.
 	ArchiveMaxRows      int
 	ArchiveFlushSeconds int
+
+	// LakeMaxRows / LakeFlushSeconds bound the laker's in-memory batch. Parquet
+	// wants large row groups, so both default high — bigger objects, better
+	// columnar compression and scan performance.
+	LakeMaxRows      int
+	LakeFlushSeconds int
 }
 
 // Load builds a Config from environment variables, applying defaults.
@@ -64,6 +70,14 @@ func Load(getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	lakeMaxRows, err := getIntOr(getenv, "LAKE_MAX_ROWS", 50000)
+	if err != nil {
+		return Config{}, err
+	}
+	lakeFlushSeconds, err := getIntOr(getenv, "LAKE_FLUSH_SECONDS", 60)
+	if err != nil {
+		return Config{}, err
+	}
 
 	cfg := Config{
 		KafkaBrokers:       splitBrokers(getOr(getenv, "KAFKA_BROKERS", "localhost:19092")),
@@ -81,6 +95,9 @@ func Load(getenv func(string) string) (Config, error) {
 
 		ArchiveMaxRows:      archiveMaxRows,
 		ArchiveFlushSeconds: archiveFlushSeconds,
+
+		LakeMaxRows:      lakeMaxRows,
+		LakeFlushSeconds: lakeFlushSeconds,
 	}
 	if len(cfg.KafkaBrokers) == 0 {
 		return Config{}, fmt.Errorf("config: KAFKA_BROKERS resolved to no brokers")
