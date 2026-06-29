@@ -37,7 +37,7 @@
       "title": "Events by type",
       "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" },
       "gridPos": { "h": 9, "w": 8, "x": 0, "y": 6 },
-      "options": { "pieType": "pie", "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }, "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": { "pieType": "pie", "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }, "reduceOptions": { "values": true, "calcs": [] } },
       "targets": [
         { "refId": "A", "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" }, "editorType": "sql", "queryType": "table", "rawSql": "SELECT event_type, count() AS c FROM wsl.events GROUP BY event_type ORDER BY c DESC" }
       ]
