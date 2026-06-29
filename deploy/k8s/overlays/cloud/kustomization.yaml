@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - all.yaml
+  - ingress.yaml
+# Cloud: set a real StorageClass via values (--set storage.className=gp3),
+# and supply the S3 secret externally (--set s3.secretKey=... or a sealed secret).

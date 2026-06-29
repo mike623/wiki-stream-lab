@@ -1,0 +1,31 @@
+{{- if .Values.tools.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: duckdb-ui
+  labels: { app: duckdb-ui }
+spec:
+  selector: { app: duckdb-ui }
+  ports:
+    - { name: http, port: 4213, targetPort: 4213 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duckdb-ui
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: duckdb-ui } }
+  template:
+    metadata:
+      labels: { app: duckdb-ui }
+    spec:
+      containers:
+        - name: duckdb-ui
+          image: wiki-stream-lab-duckdb-ui:local   # built from deploy/duckdb-ui
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - { name: HOME, value: "/duckhome" }
+          ports:
+            - { containerPort: 4213, name: http }
+{{- end }}
