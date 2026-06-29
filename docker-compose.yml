@@ -83,6 +83,63 @@ services:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
+  # --- pipeline apps (Go), all from one image (Dockerfile) ---
+
+  # One-shot: create the topics, then exit. The apps wait for it to finish.
+  topics-init:
+    build: .
+    image: wiki-stream-lab:local
+    container_name: wsl-topics-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    command: ["/app/cli", "topics", "create"]
+    restart: "no"
+
+  producer:
+    build: .
+    image: wiki-stream-lab:local
+    container_name: wsl-producer
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      PRODUCER_MAX_SECONDS: "0" # run forever
+    command: ["/app/producer"]
+    restart: unless-stopped
+
+  validator:
+    build: .
+    image: wiki-stream-lab:local
+    container_name: wsl-validator
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    command: ["/app/validator"]
+    restart: unless-stopped
+
+  # Scale for the lag demo:  docker compose up -d --scale projector=3
+  projector:
+    build: .
+    image: wiki-stream-lab:local
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      SQLITE_PATH: /data/wiki-stream-lab.sqlite
+      SLOW_CONSUMER_MS: "0" # set >0 to induce lag
+    command: ["/app/projector"]
+    volumes:
+      - sqlite-data:/data
+    restart: unless-stopped
+
 volumes:
   redpanda-data: {}
   clickhouse-data: {}
+  sqlite-data: {}
