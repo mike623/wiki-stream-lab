@@ -83,6 +83,41 @@ services:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
+  # S3-compatible object store for the raw backup + Parquet lake.
+  # S3 API on host :9100 (container 9000; 9000 is taken by clickhouse).
+  # Console UI: http://localhost:9101  (login rustfsadmin / rustfsadmin)
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: wsl-rustfs
+    ports:
+      - "9100:9000" # S3 API (host)
+      - "9101:9001" # console
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+    volumes:
+      - rustfs-data:/data
+    restart: unless-stopped
+
+  # Raw backup consumer: validated topic -> verbatim gzipped JSONL in RustFS.
+  archiver:
+    build: .
+    image: wiki-stream-lab:local
+    container_name: wsl-archiver
+    depends_on:
+      topics-init:
+        condition: service_completed_successfully
+      rustfs:
+        condition: service_started
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      S3_ENDPOINT: http://rustfs:9000
+      S3_ACCESS_KEY: rustfsadmin
+      S3_SECRET_KEY: rustfsadmin
+      S3_BUCKET: wiki-stream-lab
+    command: ["/app/archiver"]
+    restart: unless-stopped
+
   # --- pipeline apps (Go), all from one image (Dockerfile) ---
 
   # One-shot: create the topics, then exit. The apps wait for it to finish.
@@ -143,3 +178,4 @@ volumes:
   redpanda-data: {}
   clickhouse-data: {}
   sqlite-data: {}
+  rustfs-data: {}
