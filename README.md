@@ -38,6 +38,35 @@ Wikimedia SSE
 
 No web framework, no ORM, no DI framework. See [`AGENTS.md`](AGENTS.md) for the full constraints.
 
+## Run the whole thing (one command)
+
+The entire pipeline runs as Docker services — broker, Console, the Go apps (producer/validator/projector), ClickHouse, and Grafana:
+
+```bash
+docker compose up -d --build
+```
+
+That builds one image from the [`Dockerfile`](Dockerfile) (all Go binaries), then starts everything. A one-shot `topics-init` creates the topics first; the producer runs forever (`PRODUCER_MAX_SECONDS=0`); ClickHouse ingests `validated` directly.
+
+```bash
+docker compose ps                      # all services up
+docker compose logs -f producer        # follow any service
+docker compose exec projector /app/cli db inspect   # SQLite projection (in the projector container)
+docker compose exec clickhouse clickhouse-client -q "SELECT count() FROM wsl.events"
+docker compose down                    # stop  (add -v to wipe all data)
+```
+
+Open **http://localhost:3000** (Grafana) and **http://localhost:8080** (Redpanda Console).
+
+**Scale the lag demo** — run more projectors in the same consumer group:
+
+```bash
+docker compose up -d --scale projector=3   # 3 consumers share the 6 partitions
+SLOW_CONSUMER_MS=1000 docker compose up -d projector   # or slow it down to build lag
+```
+
+> Prefer host `go run` for Go dev iteration (below); use Docker to run the full system. On this machine `docker` is a podman shim — `podman machine start` first if compose can't connect.
+
 ## How this project is built and reviewed
 
 Work lands as a sequence of small PRs (PR 0..8). Each PR teaches one concept, stays well under ~300 changed lines where reasonable, includes tests, and **stops for Mike's review before the next one starts**. The roadmap lives in [`docs/CC_IMPLEMENTATION_PLAN.md`](docs/CC_IMPLEMENTATION_PLAN.md); the rules every PR follows live in [`docs/PR_CONSTITUTION.md`](docs/PR_CONSTITUTION.md).
