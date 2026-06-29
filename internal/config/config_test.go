@@ -29,6 +29,8 @@ func TestLoad(t *testing.T) {
 				S3Bucket:            "wiki-stream-lab",
 				ArchiveMaxRows:      5000,
 				ArchiveFlushSeconds: 10,
+				LakeMaxRows:         50000,
+				LakeFlushSeconds:    60,
 			},
 		},
 		{
@@ -48,6 +50,8 @@ func TestLoad(t *testing.T) {
 				S3Bucket:            "wiki-stream-lab",
 				ArchiveMaxRows:      5000,
 				ArchiveFlushSeconds: 10,
+				LakeMaxRows:         50000,
+				LakeFlushSeconds:    60,
 			},
 		},
 		{
@@ -66,6 +70,8 @@ func TestLoad(t *testing.T) {
 				"S3_BUCKET":             "bucket",
 				"ARCHIVE_MAX_ROWS":      "100",
 				"ARCHIVE_FLUSH_SECONDS": "3",
+				"LAKE_MAX_ROWS":         "200",
+				"LAKE_FLUSH_SECONDS":    "7",
 			},
 			want: Config{
 				KafkaBrokers:        []string{"broker:9092"},
@@ -81,6 +87,8 @@ func TestLoad(t *testing.T) {
 				S3Bucket:            "bucket",
 				ArchiveMaxRows:      100,
 				ArchiveFlushSeconds: 3,
+				LakeMaxRows:         200,
+				LakeFlushSeconds:    7,
 			},
 		},
 		{
