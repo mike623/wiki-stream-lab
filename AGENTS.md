@@ -43,10 +43,13 @@ Single Go module. Grow it lazily — do not scaffold empty packages ahead of nee
 - `cmd/producer` — subscribes to SSE and emits Kafka records.
 - `cmd/validator` — raw -> validated, malformed -> DLQ.
 - `cmd/projector` — consumes validated changes, writes the page-activity projection.
+- `cmd/archiver` — validated -> verbatim gzipped JSONL backup in S3 (RustFS).
+- `cmd/laker` — validated -> columnar Parquet lake in S3, Hive-partitioned by `dt=`.
 - `cmd/cli` — topics, db inspect/reset, dlq tail, replay commands.
 - `internal/event` — Wikimedia model, parsing, validation, internal envelope.
 - `internal/kafka` — thin helpers over `segmentio/kafka-go`.
 - `internal/projection` — SQLite read model + idempotency helpers.
+- `internal/objstore` — thin S3 client (RustFS) shared by archiver + laker.
 
 `testdata/` holds JSON fixtures. See `docs/CC_IMPLEMENTATION_PLAN.md` for which PR introduces each piece.
 

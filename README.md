@@ -27,6 +27,8 @@ flowchart LR
         P[producer]
         V[validator]
         PR[projector]
+        A[archiver]
+        L[laker]
     end
 
     subgraph rp[Redpanda broker]
@@ -36,12 +38,19 @@ flowchart LR
     end
 
     SQLITE[(SQLite<br/>page-activity read model)]
+    SQLWEB[sqlite-web<br/>:8081]
 
     subgraph olap[Real-time OLAP]
         CH[(ClickHouse<br/>wsl.events)]
         GRAF[Grafana<br/>:3000]
     end
 
+    subgraph s3[RustFS — S3-compatible store :9100]
+        BACKUP[(raw backup<br/>gzipped JSONL)]
+        LAKE[(Parquet lake<br/>Hive-partitioned by dt=)]
+    end
+
+    DUCK[DuckDB<br/>CLI / web UI :4213]
     CONSOLE[Redpanda Console<br/>:8080]
 
     SSE -->|HTTP SSE| P
@@ -51,12 +60,20 @@ flowchart LR
     V -->|malformed| DLQ
     VAL --> PR
     PR -->|idempotent upsert| SQLITE
+    SQLITE -.read-only.-> SQLWEB
     VAL -->|Kafka engine + MV| CH
     CH --> GRAF
+    VAL --> A
+    A -->|verbatim bytes| BACKUP
+    VAL --> L
+    L -->|columnar Parquet| LAKE
+    LAKE -->|s3 httpfs| DUCK
     rp -.observe.-> CONSOLE
 
     classDef topic fill:#1f2937,stroke:#60a5fa,color:#e5e7eb;
     class RAW,VAL,DLQ topic;
+    classDef store fill:#0f3d2e,stroke:#34d399,color:#e5e7eb;
+    class BACKUP,LAKE store;
 ```
 
 > Independent consumers read the same log. Delete SQLite and rebuild it by replaying
@@ -76,13 +93,13 @@ No web framework, no ORM, no DI framework. See [`AGENTS.md`](AGENTS.md) for the 
 
 ## Run the whole thing (one command)
 
-The entire pipeline runs as Docker services — broker, Console, the Go apps (producer/validator/projector), ClickHouse, and Grafana:
+The entire pipeline runs as Docker services — broker, Console, the Go apps (producer/validator/projector/archiver/laker), ClickHouse, Grafana, and a RustFS object store:
 
 ```bash
 docker compose up -d --build
 ```
 
-That builds one image from the [`Dockerfile`](Dockerfile) (all Go binaries), then starts everything. A one-shot `topics-init` creates the topics first; the producer runs forever (`PRODUCER_MAX_SECONDS=0`); ClickHouse ingests `validated` directly.
+That builds one image from the [`Dockerfile`](Dockerfile) (all six Go binaries), then starts everything. A one-shot `topics-init` creates the topics first; the producer runs forever (`PRODUCER_MAX_SECONDS=0`); ClickHouse ingests `validated` directly; the archiver and laker fan the same topic out to S3 (backup + Parquet lake).
 
 ```bash
 docker compose ps                      # all services up
@@ -92,7 +109,15 @@ docker compose exec clickhouse clickhouse-client -q "SELECT count() FROM wsl.eve
 docker compose down                    # stop  (add -v to wipe all data)
 ```
 
-Open **http://localhost:3000** (Grafana) and **http://localhost:8080** (Redpanda Console).
+| service | port | what |
+|---|---|---|
+| Grafana | http://localhost:3000 | real-time dashboards (ClickHouse) |
+| Redpanda Console | http://localhost:8080 | browse topics, groups, lag |
+| sqlite-web | http://localhost:8081 | read-only SQL editor over the projection |
+| RustFS Console | http://localhost:9101 | object store UI (`rustfsadmin` / `rustfsadmin`) |
+| DuckDB web UI | http://localhost:4213 | query the Parquet lake (tools profile) |
+
+DuckDB and the one-shot DuckDB CLI live behind the `tools` profile, so `up` doesn't start them — see [Query the lake with DuckDB](#query-the-lake-with-duckdb-pr-11--laker--parquet) below.
 
 **Scale the lag demo** — run more projectors in the same consumer group:
 
@@ -144,7 +169,15 @@ go run ./cmd/validator           # consumer group "validator"; Ctrl-C to stop
 
 # projector (PR 6 — works now): validated -> SQLite page-activity, idempotent
 go run ./cmd/projector           # consumer group "projector"; Ctrl-C to stop
+
+# archiver (PR 10): validated -> verbatim gzipped JSONL backup in S3 (RustFS)
+go run ./cmd/archiver            # consumer group "archiver-raw"; needs S3_* env
+
+# laker (PR 11): validated -> columnar Parquet lake in S3, Hive-partitioned by dt=
+go run ./cmd/laker               # consumer group "lake-parquet"; needs S3_* env
 ```
+
+> The archiver and laker need `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` (see `.env.example`). Easiest is to run them in Docker where those are already wired.
 
 Inspect the read model (PR 7 — `cli db`, no SQL needed):
 
@@ -252,7 +285,39 @@ docker compose exec clickhouse clickhouse-client -q \
   "SELECT wiki, count() c FROM wsl.events GROUP BY wiki ORDER BY c DESC LIMIT 5"
 ```
 
-ClickHouse is a **4th independent consumer group** on the log (alongside validator, projector) — the same event stream, read again for a different purpose. All local, no cloud. (ClickHouse is also what Tinybird runs managed — same SQL transfers.)
+ClickHouse is **one of five independent consumer groups** on the log (alongside `validator`, `projector`, `archiver-raw`, `lake-parquet`) — the same event stream, read again for a different purpose. All local, no cloud. (ClickHouse is also what Tinybird runs managed — same SQL transfers.)
+
+## Raw backup to object storage (PR 10 — archiver + RustFS)
+
+Two more consumer groups fan the `validated` topic out to an S3-compatible store ([RustFS](https://github.com/rustfs/rustfs)) — the same enterprise split as Kafka → S3 (backup) + Kafka → lakehouse (query). RustFS speaks the S3 API on host `:9100`, console on `:9101`.
+
+The **archiver** (`cmd/archiver`, group `archiver-raw`) writes a *verbatim* gzipped JSONL backup: each line is the validated message's bytes exactly as they sat in Kafka, so the backup replays back onto the topic with no decode step. The lesson is crash-safety: **offsets commit only after the object lands in S3**, so a crash before commit re-reads and rewrites the same key (offset range) — at-least-once delivery, idempotent storage.
+
+```bash
+docker compose logs -f archiver                        # watch objects land
+docker compose exec rustfs sh -c 'ls -R /data/wiki-stream-lab'   # backup objects
+```
+
+## Query the lake with DuckDB (PR 11 — laker + Parquet)
+
+The **laker** (`cmd/laker`, group `lake-parquet`) builds the curated, query-optimized copy: columnar **Parquet**, Hive-partitioned by event date (`dt=YYYY-MM-DD/`) so a date filter prunes whole files. Rows are batched into a row group in memory before each file is written (the batch is the encoder's working set, not a durability buffer — Kafka is the durable log). Same offset-after-write discipline as the archiver.
+
+Query it with **DuckDB** — no local install needed. Both run against the lake in RustFS over S3 (`httpfs`):
+
+```bash
+# one-shot interactive CLI (tools profile)
+docker compose run --rm duckdb
+# then:  SELECT wiki, count(*) FROM lake GROUP BY 1 ORDER BY 2 DESC LIMIT 10;
+
+# or the browser notebook UI
+docker compose --profile tools up -d duckdb-ui   # http://localhost:4213
+```
+
+Two reads of one log, two shapes: ClickHouse for sub-second live dashboards, the Parquet lake for cheap columnar history on object storage. DuckDB and ClickHouse's `s3()` read the *same* Parquet files.
+
+## Browse the projection in your browser (sqlite-web)
+
+The projector's SQLite read model is also exposed as a **read-only** SQL editor at **http://localhost:8081** ([sqlite-web](https://github.com/coleifer/sqlite-web)). Read-only so it never contends with the projector's writes.
 
 ## Key docs
 

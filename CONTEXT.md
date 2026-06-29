@@ -31,3 +31,11 @@ _Avoid_: automated edit, machine edit.
 **Wiki**:
 A single Wikimedia project instance, identified by its database name (`enwiki`, `commonswiki`, `wikidatawiki`). The unit of the partition key's first half.
 _Avoid_: site, project (broader), wikipedia (only one of many wikis).
+
+**Raw Backup**:
+A verbatim, gzipped JSONL copy of the `validated` topic in object storage (RustFS), each line the Kafka message's bytes unchanged so it replays back with no decode. Written by the archiver. The disaster-recovery copy, not the query copy.
+_Avoid_: archive (the command is the archiver; this is its output), dump, export.
+
+**Lake**:
+The curated, query-optimized copy of validated events: columnar Parquet in object storage, Hive-partitioned by event date (`dt=`), queried by DuckDB or ClickHouse `s3()`. Written by the laker.
+_Avoid_: warehouse (that's the served OLAP store, ClickHouse), backup (that's the verbatim JSONL copy), datalake (one word).

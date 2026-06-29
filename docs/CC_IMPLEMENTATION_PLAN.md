@@ -31,11 +31,14 @@ cmd/
   producer/main.go           # SSE -> raw topic        (PR 4)
   validator/main.go          # raw -> validated / DLQ   (PR 5)
   projector/main.go          # validated -> SQLite      (PR 6)
+  archiver/main.go           # validated -> gzipped JSONL backup in S3 (PR 10)
+  laker/main.go              # validated -> Parquet lake in S3          (PR 11)
   cli/main.go                # topics, inspect, reset, dlq tail, replay (grows over PRs)
 internal/
   event/                     # Wikimedia model, parsing, validation, envelope (PR 2)
   kafka/                     # thin helpers over segmentio/kafka-go         (PR 4+)
   projection/                # SQLite read model + idempotency               (PR 6)
+  objstore/                  # thin S3 client (RustFS) for archiver + laker  (PR 10)
 testdata/                    # JSON fixtures for table-driven tests
 ```
 
@@ -86,6 +89,18 @@ Reset SQLite projection; reset consumer offsets (or documented replay path); pro
 ### PR 8 — Backpressure / lag demo
 Configurable slow consumer (`SLOW_CONSUMER_MS`); show lag rising then draining as consumers are added to the group; document Redpanda Console / `rpk` verification.
 **Learning:** consumer groups, partitions, lag, scaling limits (capped at partition count).
+
+### PR 9 — Real-time OLAP: ClickHouse + Grafana
+ClickHouse ingests `validated` directly via its Kafka table engine (consumer group `clickhouse`, no app code); a materialized view lands rows in a MergeTree; Grafana queries it for sub-second dashboards.
+**Learning:** Kafka → OLAP fan-out, materialized views, analytics vs ops metrics.
+
+### PR 10 — Raw backup to object storage (archiver + RustFS)
+RustFS (S3-compatible) added to compose. `cmd/archiver` (group `archiver-raw`) writes verbatim gzipped JSONL of `validated` to S3; offsets commit only after the object lands. `internal/objstore` is the thin S3 client.
+**Learning:** Kafka → object storage, at-least-once + idempotent storage, offset-after-write.
+
+### PR 11 — Parquet lake + DuckDB (laker)
+`cmd/laker` (group `lake-parquet`) writes columnar Parquet, Hive-partitioned by `dt=`, to S3; queryable by the containerized DuckDB CLI and the DuckDB web UI (tools profile). A read-only `sqlite-web` exposes the projection too.
+**Learning:** columnar formats, row groups vs durability, partition pruning, lakehouse query without a server.
 
 ## Handoff report format (every implementation PR)
 
