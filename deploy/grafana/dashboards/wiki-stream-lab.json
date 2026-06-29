@@ -28,7 +28,7 @@
       "gridPos": { "h": 6, "w": 18, "x": 6, "y": 0 },
       "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 40 } }, "overrides": [] },
       "targets": [
-        { "refId": "A", "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" }, "editorType": "sql", "queryType": "timeseries", "rawSql": "SELECT toStartOfMinute(occurred_at) AS time, count() AS events FROM wsl.events GROUP BY time ORDER BY time" }
+        { "refId": "A", "datasource": { "type": "grafana-clickhouse-datasource", "uid": "clickhouse" }, "editorType": "sql", "queryType": "timeseries", "rawSql": "SELECT toStartOfMinute(ingested_at) AS time, count() AS events FROM wsl.events GROUP BY time ORDER BY time" }
       ]
     },
     {
