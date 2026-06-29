@@ -138,6 +138,18 @@ services:
     command: ["/app/laker"]
     restart: unless-stopped
 
+  # Browser SQL editor for the live projection. Read-only so it never contends
+  # with the projector's writes. UI: http://localhost:8081
+  sqlite-web:
+    image: coleifer/sqlite-web:latest
+    container_name: wsl-sqlite-web
+    ports:
+      - "8081:8080"
+    command: ["sqlite_web", "--host", "0.0.0.0", "--port", "8080", "--read-only", "/data/wiki-stream-lab.sqlite"]
+    volumes:
+      - sqlite-data:/data:ro
+    restart: unless-stopped
+
   # --- pipeline apps (Go), all from one image (Dockerfile) ---
 
   # One-shot: create the topics, then exit. The apps wait for it to finish.
