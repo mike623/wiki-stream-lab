@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs
+  labels: { app: rustfs }
+spec:
+  selector: { app: rustfs }
+  ports:
+    - { name: s3, port: 9000, targetPort: 9000 }
+    - { name: console, port: 9001, targetPort: 9001 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rustfs
+spec:
+  serviceName: rustfs
+  replicas: 1
+  selector: { matchLabels: { app: rustfs } }
+  template:
+    metadata:
+      labels: { app: rustfs }
+    spec:
+      containers:
+        - name: rustfs
+          image: rustfs/rustfs:latest
+          env:
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: s3-creds, key: accessKey } }
+            - name: RUSTFS_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: s3-creds, key: secretKey } }
+          ports:
+            - { containerPort: 9000, name: s3 }
+            - { containerPort: 9001, name: console }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- include "wsl.storageClass" . | nindent 8 }}
+        resources: { requests: { storage: {{ .Values.storage.rustfs }} } }
