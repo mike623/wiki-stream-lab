@@ -1,0 +1,8 @@
+<clickhouse>
+    <!-- librdkafka properties for the Kafka table engine. earliest = read the
+         whole topic backlog when the consumer group is new (so a fresh
+         ClickHouse rebuilds from the start of the log). -->
+    <kafka>
+        <auto_offset_reset>earliest</auto_offset_reset>
+    </kafka>
+</clickhouse>
