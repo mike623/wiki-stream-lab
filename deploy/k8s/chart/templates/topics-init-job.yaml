@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: topics-init
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 10        # retry until redpanda is reachable
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topics-init
+          image: {{ include "wsl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/cli","topics","create"]
+          env:
+            - { name: KAFKA_BROKERS, value: "{{ .Values.kafka.brokers }}" }
