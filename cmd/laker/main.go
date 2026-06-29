@@ -178,17 +178,27 @@ func (l *laker) flush(ctx context.Context, reader *kafkago.Reader) error {
 	var commit []kafkago.Message
 	for _, part := range sortedParts(l.batch) {
 		es := l.batch[part]
-		lo, hi := es[0].msg.Offset, es[len(es)-1].msg.Offset
-		key := fmt.Sprintf("lake/topic=%s/p=%d/%020d-%020d.parquet",
-			wkafka.TopicValidated, part, lo, hi)
 
-		body, err := parquetBytes(es)
-		if err != nil {
-			return err
+		// Hive-partition by event date so DuckDB/ClickHouse can prune whole
+		// dt= directories instead of scanning the bucket. A batch can straddle
+		// midnight, so split it: each object holds exactly one day's rows.
+		byDate := groupByDate(es)
+		for _, d := range sortedDates(byDate) {
+			bucket := byDate[d]
+			lo, hi := bucket[0].msg.Offset, bucket[len(bucket)-1].msg.Offset
+			key := fmt.Sprintf("lake/dt=%s/p=%d/%020d-%020d.parquet", d, part, lo, hi)
+
+			body, err := parquetBytes(bucket)
+			if err != nil {
+				return err
+			}
+			if err := l.store.Put(ctx, key, body); err != nil {
+				return err
+			}
 		}
-		if err := l.store.Put(ctx, key, body); err != nil {
-			return err
-		}
+
+		// One commit per partition: the highest offset commits all prior in it,
+		// regardless of how many date objects the batch split into.
 		commit = append(commit, es[len(es)-1].msg)
 	}
 
@@ -228,4 +238,30 @@ func sortedParts(batch map[int][]entry) []int {
 	}
 	sort.Ints(parts)
 	return parts
+}
+
+// dateOf renders a unix-seconds timestamp as a UTC YYYY-MM-DD partition value.
+// UTC (not local) keeps partition boundaries stable across machines.
+func dateOf(unixSec int64) string {
+	return time.Unix(unixSec, 0).UTC().Format("2006-01-02")
+}
+
+// groupByDate buckets a partition's entries by their event date, preserving
+// input (offset) order within each bucket.
+func groupByDate(es []entry) map[string][]entry {
+	byDate := make(map[string][]entry)
+	for _, e := range es {
+		d := dateOf(e.row.OccurredAt)
+		byDate[d] = append(byDate[d], e)
+	}
+	return byDate
+}
+
+func sortedDates(byDate map[string][]entry) []string {
+	dates := make([]string, 0, len(byDate))
+	for d := range byDate {
+		dates = append(dates, d)
+	}
+	sort.Strings(dates)
+	return dates
 }
