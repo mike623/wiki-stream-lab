@@ -29,6 +29,16 @@ spec:
     metadata:
       labels: { app: projector }
     spec:
+      # Topics aren't auto-created (see redpanda.yaml). Ensure they exist at the
+      # right partition count before the consumer's Reader starts — kafka-go
+      # Readers don't recover if their topic is absent at startup.
+      initContainers:
+        - name: wait-topics
+          image: {{ include "wsl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/cli","topics","create"]
+          env:
+            - { name: KAFKA_BROKERS, value: "{{ .Values.kafka.brokers }}" }
       containers:
         - name: projector
           image: {{ include "wsl.image" . }}

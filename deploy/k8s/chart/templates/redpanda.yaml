@@ -31,6 +31,10 @@ spec:
             - --mode=dev-container
             - --smp=1
             - --default-log-level=info
+            # k8s has no Compose depends_on ordering: producer would auto-create
+            # the topics at 1 partition before the topics-init hook makes them
+            # at 6. Disable auto-create so topics-init is the sole creator.
+            - --set redpanda.auto_create_topics_enabled=false
             - --kafka-addr=internal://0.0.0.0:9092
             - --advertise-kafka-addr=internal://redpanda:9092
             - --rpc-addr=0.0.0.0:33145
