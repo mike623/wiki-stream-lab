@@ -35,3 +35,4 @@ logs/
 
 # subagent-driven-development scratch (ledger, reports, review packages)
 .superpowers/
+.gstack/
